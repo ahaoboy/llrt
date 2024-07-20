@@ -6,7 +6,7 @@ license-file = "LICENSE"
 
 [features]
 default = ["all"]
-all = ["buffer", "fs", "os", "path", "process"]
+all = ["buffer", "fs", "os", "path", "process", "perf_hooks"]
 
 buffer = ["llrt_utils/encoding"]
 fs = ["tokio/fs", "llrt_utils/fs", "ring", "buffer", "path"]
@@ -20,6 +20,7 @@ os = [
 ]
 path = []
 process = []
+perf_hooks = []
 
 [dependencies]
 either = "1"
