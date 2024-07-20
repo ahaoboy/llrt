@@ -13,8 +13,9 @@ use std::time::SystemTime;
 static START_TIME: Lazy<SystemTime> = Lazy::new(SystemTime::now);
 
 fn now() -> usize {
+    let start = *START_TIME;
     SystemTime::now()
-        .duration_since(*START_TIME)
+        .duration_since(start)
         .expect("Time went backwards")
         .as_millis() as usize
 }
@@ -45,5 +46,42 @@ impl From<PerfHooksModule> for ModuleInfo<PerfHooksModule> {
             name: "perf_hooks",
             module: val,
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::{call_test, test_async_with, ModuleEvaluator};
+
+    #[tokio::test]
+    async fn test_now() {
+        test_async_with(|ctx| {
+            Box::pin(async move {
+                ModuleEvaluator::eval_rust::<PerfHooksModule>(ctx.clone(), "perf_hooks")
+                    .await
+                    .unwrap();
+
+                let module = ModuleEvaluator::eval_js(
+                    ctx.clone(),
+                    "test",
+                    r#"
+                        import { performance } from 'perf_hooks';
+
+                        export async function test() {
+                            const now = performance.now()
+                            // TODO: Delaying with setTimeout
+                            for(let i=0; i < (1<<20); i++){}
+
+                            return performance.now() - now
+                        }
+                    "#,
+                )
+                .await
+                .unwrap();
+                let result = call_test::<u32, _>(&ctx, &module, ()).await;
+                assert!(result > 0)
+            })
+        })
+        .await;
     }
 }
