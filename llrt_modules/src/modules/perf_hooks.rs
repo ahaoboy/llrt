@@ -1,23 +1,46 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 use crate::ModuleInfo;
+use chrono::Utc;
 use llrt_utils::module::export_default;
-use once_cell::sync::Lazy;
 use rquickjs::{
+    atom::PredefinedAtom,
     module::{Declarations, Exports, ModuleDef},
     prelude::Func,
     Ctx, Object, Result,
 };
-use std::time::SystemTime;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
-static START_TIME: Lazy<SystemTime> = Lazy::new(SystemTime::now);
+pub static PERFORMANCE_TIME_ORIGIN: AtomicUsize = AtomicUsize::new(0);
 
-fn now() -> usize {
-    let start = *START_TIME;
-    SystemTime::now()
-        .duration_since(start)
-        .expect("Time went backwards")
-        .as_millis() as usize
+fn get_time_origin() -> f64 {
+    let time_origin = PERFORMANCE_TIME_ORIGIN.load(Ordering::Relaxed) as f64;
+
+    time_origin / 1e6
+}
+
+fn now() -> f64 {
+    let now = Utc::now().timestamp_nanos_opt().unwrap_or_default() as f64;
+    let started = PERFORMANCE_TIME_ORIGIN.load(Ordering::Relaxed) as f64;
+
+    (now - started) / 1e6
+}
+
+fn to_json(ctx: Ctx<'_>) -> Result<Object<'_>> {
+    let obj = Object::new(ctx.clone())?;
+
+    obj.set("timeOrigin", get_time_origin())?;
+
+    Ok(obj)
+}
+
+pub fn new_performance(ctx: Ctx<'_>) -> Result<Object<'_>> {
+    let performance = Object::new(ctx)?;
+    performance.set("timeOrigin", get_time_origin())?;
+    performance.set("now", Func::from(now))?;
+    performance.set(PredefinedAtom::ToJSON, Func::from(to_json))?;
+    Ok(performance)
 }
 
 pub struct PerfHooksModule;
@@ -31,9 +54,7 @@ impl ModuleDef for PerfHooksModule {
 
     fn evaluate<'js>(ctx: &Ctx<'js>, exports: &Exports<'js>) -> Result<()> {
         export_default(ctx, exports, |default| {
-            let now_fn = Func::from(now);
-            let performance = Object::new(ctx.clone())?;
-            performance.set("now", now_fn)?;
+            let performance = new_performance(ctx.clone())?;
             default.set("performance", performance)?;
             Ok(())
         })
@@ -80,6 +101,34 @@ mod tests {
                 .unwrap();
                 let result = call_test::<u32, _>(&ctx, &module, ()).await;
                 assert!(result > 0)
+            })
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_time_origin() {
+        test_async_with(|ctx| {
+            Box::pin(async move {
+                ModuleEvaluator::eval_rust::<PerfHooksModule>(ctx.clone(), "perf_hooks")
+                    .await
+                    .unwrap();
+
+                let module = ModuleEvaluator::eval_js(
+                    ctx.clone(),
+                    "test",
+                    r#"
+                        import { performance } from 'perf_hooks';
+
+                        export async function test() {
+                            return performance.timeOrigin
+                        }
+                    "#,
+                )
+                .await
+                .unwrap();
+                let result = call_test::<f64, _>(&ctx, &module, ()).await;
+                assert!(result == 0.0);
             })
         })
         .await;

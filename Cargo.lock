@@ -2621,6 +2621,7 @@ dependencies = [
 name = "llrt_modules"
 version = "0.1.15-beta"
 dependencies = [
+ "chrono",
  "either",
  "libc",
  "llrt_utils",

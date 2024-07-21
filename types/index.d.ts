@@ -4,3 +4,4 @@
 /// <reference types="./globals.d.ts" />
 /// <reference types="./os.d.ts" />
 /// <reference types="./path.d.ts" />
+/// <reference types="./perf_hooks.d.ts" />
