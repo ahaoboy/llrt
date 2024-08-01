@@ -19,6 +19,8 @@ all = [
   "process",
   "perf_hooks",
   "performance",
+  "exceptions",
+  "navigator",
 ]
 
 buffer = ["llrt_utils/encoding"]
@@ -37,6 +39,8 @@ path = []
 process = []
 perf_hooks = ["chrono"]
 performance = ["perf_hooks"]
+navigator = []
+exceptions = []
 
 __bytearray-buffer = ["tokio/sync"]
 __stream = ["buffer", "__bytearray-buffer"]
