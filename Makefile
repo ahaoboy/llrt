@@ -1,4 +1,5 @@
 TARGET_linux_x86_64 = x86_64-unknown-linux-musl
+TARGET_windows_x64 = x86_64-pc-windows-gnu
 TARGET_linux_arm64 = aarch64-unknown-linux-musl
 TARGET_darwin_x86_64 = x86_64-apple-darwin
 TARGET_darwin_arm64 = aarch64-apple-darwin
@@ -7,10 +8,16 @@ TOOLCHAIN = +$(RUST_VERSION)
 BUILD_ARG = $(TOOLCHAIN) build -r
 BUILD_DIR = ./target/release
 BUNDLE_DIR = bundle
+ifeq ($(DETECTED_OS),windows)
+ZSTD_LIB_ARGS = -j lib-nomt UNAME=Windows ZSTD_LIB_COMPRESSION=0 ZSTD_LIB_DICTBUILDER=0 AR="zig ar"
+ZSTD_LIB_CC_ARGS = -s -O3 -flto
+ZSTD_LIB_CC_x64 = CC="zig cc -target x86_64-windows-gnu $(ZSTD_LIB_CC_ARGS)"
+else
 ZSTD_LIB_ARGS = -j lib-nomt UNAME=Linux ZSTD_LIB_COMPRESSION=0 ZSTD_LIB_DICTBUILDER=0 AR="zig ar"
 ZSTD_LIB_CC_ARGS = -s -O3 -flto
 ZSTD_LIB_CC_arm64 = CC="zig cc -target aarch64-linux-musl $(ZSTD_LIB_CC_ARGS)"
 ZSTD_LIB_CC_x64 = CC="zig cc -target x86_64-linux-musl $(ZSTD_LIB_CC_ARGS)"
+endif
 
 TS_SOURCES = $(wildcard llrt_core/src/modules/js/*.ts) $(wildcard llrt_core/src/modules/js/@llrt/*.ts) $(wildcard tests/unit/*.ts)
 STD_JS_FILE = $(BUNDLE_DIR)/js/@llrt/std.js
@@ -23,10 +30,10 @@ RELEASE_TARGETS = arm64 x64
 RELEASE_ZIPS = $(addprefix $(LAMBDA_PREFIX)-,$(RELEASE_TARGETS))
 
 ifeq ($(OS),Windows_NT)
-    DETECTED_OS := Windows
+	DETECTED_OS := windows
 	ARCH = x64
 else
-    DETECTED_OS := $(shell uname | tr A-Z a-z)
+	DETECTED_OS := $(shell uname | tr A-Z a-z)
 	ARCH = $(shell uname -m)
 endif
 
@@ -62,6 +69,10 @@ llrt-linux-x64.zip: | clean-js js
 	cargo $(BUILD_ARG) --target $(TARGET_linux_x86_64)
 	zip -j $@ target/$(TARGET_linux_x86_64)/release/llrt
 
+llrt-windows-x64.zip: | clean-js js
+	cargo $(BUILD_ARG) --target $(TARGET_windows_x86_64)
+	zip -j $@ target/$(TARGET_windows_x86_64)/release/llrt
+
 llrt-linux-arm64.zip: | clean-js js
 	cargo $(BUILD_ARG) --target $(TARGET_linux_arm64)
 	zip -j $@ target/$(TARGET_linux_arm64)/release/llrt
@@ -86,6 +97,12 @@ $(foreach target,$(RELEASE_TARGETS),$(eval $(call release_template,$(target))))
 build: js
 	cargo $(BUILD_ARG) --target $(CURRENT_TARGET)
 
+ifeq ($(DETECTED_OS),windows)
+stdlib:
+	rustup target add $(TARGET_windows_x64)
+	rustup toolchain install $(RUST_VERSION) --target $(TARGET_windows_x64)
+	rustup component add rust-src --toolchain $(RUST_VERSION) --target $(TARGET_windows_x64)
+else
 stdlib:
 	rustup target add $(TARGET_linux_x86_64)
 	rustup target add $(TARGET_linux_arm64)
@@ -93,6 +110,7 @@ stdlib:
 	rustup toolchain install $(RUST_VERSION) --target $(TARGET_linux_arm64)
 	rustup component add rust-src --toolchain $(RUST_VERSION) --target $(TARGET_linux_arm64)
 	rustup component add rust-src --toolchain $(RUST_VERSION) --target $(TARGET_linux_x86_64)
+endif
 
 toolchain:
 	rustup target add $(CURRENT_TARGET)
@@ -118,7 +136,7 @@ fix:
 	cargo fmt
 
 bloat: js
-	cargo build --profile=flame --target $(TARGET_linux_x86_64)
+	cargo build --profile=flame --target $(CURRENT_TARGET)
 	cargo bloat --profile=flame --crates
 
 run: export AWS_LAMBDA_FUNCTION_NAME = n/a
@@ -129,7 +147,7 @@ run: export _EXIT_ITERATIONS = 1
 run: export JS_MINIFY = 0
 run: export RUST_LOG = llrt=trace
 run: export _HANDLER = index.handler
-run: 
+run:
 	cargo run -vv
 
 run-ssr: export AWS_LAMBDA_RUNTIME_API = localhost:3000
