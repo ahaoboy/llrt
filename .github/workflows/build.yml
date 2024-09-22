@@ -18,10 +18,16 @@ on:
         required: false
         type: string
         default: "nightly"
+      RUSTFLAGS:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build:
     runs-on: ${{ inputs.os }}
+    env:
+      RUSTFLAGS: ${{ inputs.RUSTFLAGS }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -41,3 +41,4 @@ jobs:
       arch: ${{ matrix.arch }}
       release: ${{ matrix.release }}
       toolchain: ${{ matrix.toolchain }}
+      RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
