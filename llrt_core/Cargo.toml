@@ -75,6 +75,10 @@ rustls-pemfile = "2"
 home = "0.5"
 url = "=2.5.1"
 terminal_size = "0.4"
+swc = "6"
+swc_ecmascript = "6"
+swc_common = "4"
+serde = { version = "1.0", features = ["derive"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 md-5 = { version = "0.10" }

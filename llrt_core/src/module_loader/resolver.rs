@@ -73,7 +73,7 @@ impl Resolver for CustomResolver {
 
         trace!("Try resolve '{}' from '{}'", name, base);
 
-        require_resolve(ctx, name, base, true).map(|name| name.into_owned())
+        require_resolve(ctx, name, base, true).map(|name| name.replace("\\", "/"))
     }
 }
 

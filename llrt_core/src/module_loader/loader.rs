@@ -11,6 +11,25 @@ use tracing::trace;
 use zstd::{bulk::Decompressor, dict::DecoderDictionary};
 
 use super::CJS_IMPORT_PREFIX;
+use std::{path::Path, sync::Arc};
+use swc::try_with_handler;
+use swc_common::{SourceMap, GLOBALS};
+
+fn transform(path: &str) -> String {
+    let cm = Arc::<SourceMap>::default();
+    let c = swc::Compiler::new(cm.clone());
+    let output = GLOBALS
+        .set(&Default::default(), || {
+            try_with_handler(cm.clone(), Default::default(), |handler| {
+                let fm = cm.load_file(Path::new(path)).expect("failed to load file");
+                let opts: swc::config::Options = Default::default();
+                // opts.config.module = Some(ModuleConfig::CommonJs(Default::default()));
+                c.process_js_file(fm, handler, &opts)
+            })
+        })
+        .unwrap();
+    output.code
+}
 
 use crate::{
     bytecode::{
@@ -196,11 +215,15 @@ impl CustomLoader {
             trace!("Loading binary module: {}", path);
             return Ok((Self::load_bytecode_module(ctx, bytes)?, Some(path.into())));
         }
+        let url = ["file://", path].concat();
+        if normalized_name.ends_with(".ts") || normalized_name.ends_with(".tsx") {
+            trace!("Loading ts/tsx module: {}", path);
+            let code = transform(path);
+            return Ok((Module::declare(ctx, normalized_name, code)?, Some(url)));
+        }
         if !from_cjs_import && bytes.starts_with(b"#!") {
             bytes = bytes.splitn(2, |&c| c == b'\n').nth(1).unwrap_or(bytes);
         }
-
-        let url = ["file://", path].concat();
         Ok((Module::declare(ctx, normalized_name, bytes)?, Some(url)))
     }
 }
